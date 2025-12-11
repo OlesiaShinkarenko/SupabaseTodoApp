@@ -1,5 +1,7 @@
 package com.example.supabasetodoapp.adapters;
 
+import android.app.AlertDialog;
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -46,6 +48,21 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
                     return true;
                 }
         );
+
+        holder.btnDelete.setOnClickListener(v -> {
+            Context ctx = v.getContext();
+            new AlertDialog.Builder(ctx)
+                    .setTitle("Удалить задачу?")
+                    .setMessage(task.getTitle())
+                    .setPositiveButton(
+                            "Да", (d, i) ->
+                            {
+                                if (ctx instanceof MainActivity) {
+                                    ((MainActivity) ctx).deleteTask(task.getId());
+                                }
+                            }
+                    ).setNegativeButton("Нет", null).show();
+        });
     }
 
     @Override

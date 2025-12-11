@@ -293,6 +293,35 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    public void deleteTask(String id) {
+        networkExecutor.execute(() -> {
+                    HttpURLConnection conn = null;
+                    try {
+                        URL url = new URL(TASKS_URL + "&id=eq." + id);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("DELETE");
+                        conn.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                        conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+
+                        int code = conn.getResponseCode();
+                        if (code == 200 || code == 204) {
+                            mainHandler.post(this::loadTasks);
+                        } else {
+                            mainHandler.post(() ->
+                                    Toast.makeText(this, "Ошибка удаления: " + code, Toast.LENGTH_SHORT).show());
+                        }
+                    } catch (Exception e) {
+                        mainHandler.post(() ->
+                                Toast.makeText(this, e.getMessage(), Toast.LENGTH_SHORT).show());
+                    } finally {
+                        {
+                            if (conn != null) conn.disconnect();
+                        }
+                    }
+                }
+        );
+    }
+
     private ArrayList<Task> parseTasks(String json) throws Exception {
         ArrayList<Task> result = new ArrayList<>();
         JSONArray arr = new JSONArray(json);
