@@ -3,6 +3,7 @@ package com.example.supabasetodoapp.adapters;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageButton;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -21,11 +22,6 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
         this.tasks = tasks;
     }
 
-    public void setTasks(List<Task> newTasks) {
-        this.tasks = newTasks;
-        notifyDataSetChanged();
-    }
-
     @NonNull
     @Override
     public TaskViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -40,6 +36,7 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
         holder.tvTitle.setText(task.getTitle());
         holder.tvPriority.setText("Priority: " + task.getPriority());
         holder.tvDueDate.setText("Due: " + task.getDueDate());
+        holder.itemId = task.getId();
     }
 
     @Override
@@ -47,16 +44,20 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
         return tasks == null ? 0 : tasks.size();
     }
 
-    static class TaskViewHolder extends RecyclerView.ViewHolder {
+    public static class TaskViewHolder extends RecyclerView.ViewHolder {
+
+        String itemId;
         TextView tvTitle;
         TextView tvPriority;
         TextView tvDueDate;
+        ImageButton btnDelete;
 
         TaskViewHolder(@NonNull View itemView) {
             super(itemView);
             tvTitle = itemView.findViewById(R.id.tvTitle);
             tvPriority = itemView.findViewById(R.id.tvPriority);
             tvDueDate = itemView.findViewById(R.id.tvDueDate);
+            btnDelete = itemView.findViewById(R.id.btnDelete);
         }
     }
 }

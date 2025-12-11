@@ -1,10 +1,16 @@
 package com.example.supabasetodoapp;
 
+import static android.widget.Toast.LENGTH_SHORT;
+import static com.example.supabasetodoapp.network.SupabaseConfig.TASKS_URL;
+
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -18,6 +24,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.supabasetodoapp.adapters.TasksAdapter;
 import com.example.supabasetodoapp.models.Task;
 import com.example.supabasetodoapp.network.SupabaseConfig;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -26,7 +33,9 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -36,8 +45,9 @@ public class MainActivity extends AppCompatActivity {
     private final ExecutorService networkExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private RecyclerView recyclerView;
     private TasksAdapter adapter;
+    private String accessToken;
+    private String userId;
     private ArrayList<Task> tasks = new ArrayList<>();
 
     @Override
@@ -52,25 +62,107 @@ public class MainActivity extends AppCompatActivity {
         });
 
         SharedPreferences prefs = getSharedPreferences("session", MODE_PRIVATE);
-        String accessToken = prefs.getString("access_token", null);
+        accessToken = prefs.getString("access_token", null);
+        userId = prefs.getString("user_id", null);
         if (accessToken == null) {
             startActivity(new Intent(this, LoginActivity.class));
             finish();
             return;
         }
 
-        recyclerView = findViewById(R.id.recyclerView); // id из activity_main.xml
+        FloatingActionButton fab = findViewById(R.id.fabAddItem);
+        fab.setOnClickListener(v -> showAddDialog());
+
+        RecyclerView recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
         adapter = new TasksAdapter(tasks);
         recyclerView.setAdapter(adapter);
-        loadTasks(accessToken);
+        loadTasks();
     }
 
-    private void loadTasks(String accessToken) {
+    private void showAddDialog() {
+        final EditText etTitle = new EditText(this);
+        etTitle.setHint("Название задачи");
+
+        final EditText etPriority = new EditText(this);
+        etPriority.setHint("Приоритет (число)");
+
+        final EditText etDueDate = new EditText(this);
+        etDueDate.setHint("Дата (YYYY-MM-DD)");
+
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding, padding, padding);
+        container.addView(etTitle);
+        container.addView(etPriority);
+        container.addView(etDueDate);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Новая задача")
+                .setView(container)
+                .setPositiveButton("Добавить", (dialog, which) -> {
+                    String title = etTitle.getText().toString().trim();
+                    String prioStr = etPriority.getText().toString().trim();
+                    String dueDate = etDueDate.getText().toString().trim();
+
+                    if (title.isEmpty() || prioStr.isEmpty()) {
+                        Toast.makeText(this, "Заполните название и приоритет", LENGTH_SHORT).show();
+                    }
+
+                    int priority = Integer.parseInt(prioStr);
+                    addTask(title, priority, dueDate);
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void addTask(String title, int priority, String dueDate) {
+        networkExecutor.execute(() -> {
+                    HttpURLConnection conn = null;
+                    try {
+                        URL url = new URL(TASKS_URL);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("POST");
+                        conn.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                        conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+                        conn.setRequestProperty("Content-Type", "application/json");
+                        conn.setDoOutput(true);
+
+                        JSONObject json = new JSONObject();
+                        json.put("title", title);
+                        json.put("priority", priority);
+                        json.put("due_date", dueDate);
+                        json.put("user_id", userId);
+
+                        byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
+                        conn.getOutputStream().write(body);
+
+                        int code = conn.getResponseCode();
+                        if (code == 201 || code == 200) {
+                            mainHandler.post(this::loadTasks);
+                        } else {
+                            mainHandler.post(() ->
+                                    Toast.makeText(this, "Ошибка добавления: " + code, LENGTH_SHORT).show());
+                        }
+                    } catch (Exception e) {
+                        mainHandler.post(() ->
+                                Toast.makeText(this, e.getMessage(),
+                                        LENGTH_SHORT
+                                ).show()
+                        );
+                    } finally {
+                        if(conn != null) conn.disconnect();
+                    }
+                }
+        );
+    }
+
+    private void loadTasks() {
         networkExecutor.execute(() -> {
             HttpURLConnection connection = null;
             try {
-                URL url = new URL(SupabaseConfig.TASKS_URL + "?select=*");
+                URL url = new URL(TASKS_URL + "?select=*");
                 connection = (HttpURLConnection) url.openConnection();
                 connection.setRequestMethod("GET");
                 connection.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
@@ -92,12 +184,12 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     int finalCode = code;
                     mainHandler.post(() ->
-                            Toast.makeText(this, "Ошибка загрузки: " + finalCode, Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "Ошибка загрузки: " + finalCode, LENGTH_SHORT).show()
                     );
                 }
             } catch (Exception e) {
                 mainHandler.post(() ->
-                        Toast.makeText(this, "Ошибка: " + e.getMessage(), Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "Ошибка: " + e.getMessage(), LENGTH_SHORT).show()
                 );
             } finally {
                 if (connection != null) connection.disconnect();
@@ -110,10 +202,11 @@ public class MainActivity extends AppCompatActivity {
         JSONArray arr = new JSONArray(json);
         for (int i = 0; i < arr.length(); i++) {
             JSONObject obj = arr.getJSONObject(i);
+            String id = obj.getString("id");
             String title = obj.getString("title");
             int priority = obj.getInt("priority");
             String dueDate = obj.getString("due_date");
-            result.add(new Task(title, priority, dueDate));
+            result.add(new Task(id, title, priority, dueDate));
         }
         return result;
     }

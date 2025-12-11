@@ -4,8 +4,10 @@ public class Task {
     private String title;
     private int priority;
     private String dueDate;
+    private String id;
 
-    public Task(String title, int priority, String dueDate) {
+    public Task(String id, String title, int priority, String dueDate) {
+        this.id = id;
         this.title = title;
         this.priority = priority;
         this.dueDate = dueDate;
@@ -33,5 +35,9 @@ public class Task {
 
     public void setDueDate(String dueDate) {
         this.dueDate = dueDate;
+    }
+
+    public String getId() {
+        return id;
     }
 }
