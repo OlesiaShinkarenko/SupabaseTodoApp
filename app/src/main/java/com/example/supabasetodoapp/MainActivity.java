@@ -9,6 +9,8 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
+import android.util.Log;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Toast;
@@ -39,6 +41,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -117,6 +120,99 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
+    public void showEditDialog(String id, String currentTitle, int currentPriority, String currentDueDate) {
+        final EditText etTitle = new EditText(this);
+        etTitle.setHint("Название задачи");
+        etTitle.setText(currentTitle);
+
+        final EditText etPriority = new EditText(this);
+        etPriority.setHint("Приоритет");
+        etPriority.setInputType(InputType.TYPE_CLASS_NUMBER);
+        etPriority.setText(String.valueOf(currentPriority));
+
+        final EditText etDueDate = new EditText(this);
+        etDueDate.setText("Дата (YYYY-MM-DD)");
+        etDueDate.setText(currentDueDate);
+
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int) (16 * getResources().getDisplayMetrics().density);
+        container.setPadding(padding, padding, padding, padding);
+        container.addView(etTitle);
+        container.addView(etPriority);
+        container.addView(etDueDate);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Редактирование задачи")
+                .setView(container)
+                .setPositiveButton("Обновить", (dialog, which) -> {
+                    String title = etTitle.getText().toString().trim();
+                    String prioStr = etPriority.getText().toString().trim();
+                    String dueDate = etDueDate.getText().toString().trim();
+
+                    if (title.isEmpty() || prioStr.isEmpty()) {
+                        Toast.makeText(this, "Заполните название и приоритет",
+                                LENGTH_SHORT).show();
+                    }
+
+                    int priority = Integer.parseInt(prioStr);
+                    updateTask(id, title, priority, dueDate);
+                }).setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void updateTask(String id, String title, int priority, String dueDate) {
+        networkExecutor.execute(() -> {
+                    HttpURLConnection conn = null;
+                    try {
+                        URL url = new URL(TASKS_URL + "&id=eq." + id);
+                        conn = (HttpURLConnection) url.openConnection();
+                        conn.setRequestMethod("PATCH");
+                        conn.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                        conn.setRequestProperty("Authorization", "Bearer " + accessToken);
+                        conn.setRequestProperty("Content-Type", "application/json");
+                        conn.setDoOutput(true);
+
+                        JSONObject json = new JSONObject();
+                        json.put("title", title);
+                        json.put("priority", priority);
+                        json.put("due_date", dueDate);
+
+                        byte[] body = json.toString().getBytes(StandardCharsets.UTF_8);
+                        conn.getOutputStream().write(body);
+
+                        int code = conn.getResponseCode();
+
+                        InputStream err = (code >= 400) ? conn.getErrorStream() : conn.getInputStream();
+                        String errorBody = err != null ? new BufferedReader(new InputStreamReader(err))
+                                .lines().collect(Collectors.joining("\n")) : "";
+                        Log.e("UPDATE_ERROR", "code=" + code + " body=" + errorBody);
+
+                        if (code == 200 || code == 204) {
+                            mainHandler.post(this::loadTasks);
+                        } else {
+                            mainHandler.post(() ->
+                                    Toast.makeText(
+                                            this,
+                                            "Ошибка обновления: " + code,
+                                            LENGTH_SHORT
+                                    ).show()
+                            );
+                        }
+                    } catch (Exception e) {
+                        mainHandler.post(() ->
+                                Toast.makeText(this,
+                                        "Ошибка обновления: " + e.getMessage(),
+                                        LENGTH_SHORT).show()
+
+                        );
+                    } finally {
+                        if (conn != null) conn.disconnect();
+                    }
+                }
+        );
+    }
+
     private void addTask(String title, int priority, String dueDate) {
         networkExecutor.execute(() -> {
                     HttpURLConnection conn = null;
@@ -152,7 +248,7 @@ public class MainActivity extends AppCompatActivity {
                                 ).show()
                         );
                     } finally {
-                        if(conn != null) conn.disconnect();
+                        if (conn != null) conn.disconnect();
                     }
                 }
         );

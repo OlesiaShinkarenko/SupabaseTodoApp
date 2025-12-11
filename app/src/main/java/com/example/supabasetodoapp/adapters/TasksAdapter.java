@@ -9,6 +9,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.supabasetodoapp.MainActivity;
 import com.example.supabasetodoapp.R;
 import com.example.supabasetodoapp.models.Task;
 
@@ -37,6 +38,14 @@ public class TasksAdapter extends RecyclerView.Adapter<TasksAdapter.TaskViewHold
         holder.tvPriority.setText("Priority: " + task.getPriority());
         holder.tvDueDate.setText("Due: " + task.getDueDate());
         holder.itemId = task.getId();
+
+
+        holder.itemView.setOnLongClickListener(v -> {
+                    ((MainActivity) holder.itemView.getContext())
+                            .showEditDialog(task.getId(), task.getTitle(), task.getPriority(), task.getDueDate());
+                    return true;
+                }
+        );
     }
 
     @Override
